@@ -1,0 +1,54 @@
+name: Train models and publish the app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the library versions of the published models
+        run: pip install "scikit-learn==1.6.1" "ngboost==0.5.11" numpy pandas openpyxl
+
+      - name: Train the PI-NGB-TSTR models and export them for the app
+        run: python tools/train_export.py
+
+      - name: Save the trained models in the repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/*.npz training_report.md
+          git diff --cached --quiet || git commit -m "Update trained PI-NGB-TSTR models"
+          git push
+
+      - name: Collect the website files
+        run: |
+          mkdir _site
+          cp -r index.html .nojekyll app.py rapcore models examples _site/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
