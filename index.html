@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RAP Superpave Performance Predictor</title>
+  <meta name="description" content="Physics-guided probabilistic prediction of ITSD, TSR and rut depth of RAP Superpave mixtures (PI-NGB-TSTR). Runs entirely in your browser." />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.css" />
+  <style>
+    html, body { margin: 0; background: #ffffff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f1f1e; }
+    #loading { max-width: 640px; margin: 18vh auto 0; padding: 0 16px; text-align: center; }
+    #loading h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 .5rem; }
+    #loading p { color: #52514e; line-height: 1.5; }
+    .bar { height: 4px; background: #e4e3df; border-radius: 2px; overflow: hidden; margin: 1.5rem auto 0; max-width: 320px; }
+    .bar::after { content: ""; display: block; height: 100%; width: 35%; background: #2a78d6; animation: slide 1.4s ease-in-out infinite; }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <h1>RAP Superpave Performance Predictor</h1>
+    <p>Loading the PI-NGB-TSTR models in your browser. The first visit takes about 30–60 seconds while Python is downloaded;
+       later visits are faster. Your inputs never leave your computer.</p>
+    <div class="bar"></div>
+  </div>
+  <div id="root"></div>
+  <script type="module">
+    import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.js";
+    const f = (p) => ({ url: "./" + p });
+    const files = {};
+    for (const p of ["app.py", "rapcore/__init__.py", "rapcore/features.py", "rapcore/engine.py", "rapcore/export.py",
+                     "models/ITSD.npz", "models/TSR.npz", "models/RD.npz", "models/meta.json"]) files[p] = f(p);
+    mount(
+      {
+        requirements: ["numpy", "pandas", "matplotlib", "openpyxl"],
+        entrypoint: "app.py",
+        files,
+        streamlitConfig: {
+          "theme.base": "light",
+          "theme.primaryColor": "#2a78d6",
+          "theme.backgroundColor": "#ffffff",
+          "theme.secondaryBackgroundColor": "#f4f6f9",
+          "theme.textColor": "#1f1f1e",
+          "client.toolbarMode": "viewer",
+        },
+      },
+      document.getElementById("root"),
+    );
+    // hide the loading note once the Streamlit app has rendered its first content
+    const obs = new MutationObserver(() => {
+      if (document.querySelector("#root [data-testid='stApp'], #root .stApp")) {
+        document.getElementById("loading").style.display = "none"; obs.disconnect();
+      }
+    });
+    obs.observe(document.getElementById("root"), { childList: true, subtree: true });
+  </script>
+</body>
+</html>
