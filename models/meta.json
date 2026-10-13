@@ -779,8 +779,8 @@
   "subtitle": "Physics-guided probabilistic prediction of dry indirect tensile strength, tensile strength ratio and rut depth",
   "model": "PI-NGB-TSTR (physics-informed NGBoost trained on real + PI-TVAE synthetic mixtures)",
   "paper": "Next-Generation Physics-Guided AI Framework for Life-Cycle Performance Prediction of RAP Superpave Mixtures",
-  "authors": "",
-  "affiliation": "",
+  "authors": "Asim Abbas¹, Aman Kumar¹ and Moncef L. Nehdi²*",
+  "affiliation": "¹ Department of Civil Engineering, McMaster University, Hamilton, ON, L8S 4L7, Canada  \n² College of Engineering, University of Guelph, Guelph, ON, N1G 2W1, Canada  \n* Corresponding author",
   "citation": "",
   "rct_definitions": {
    "Type A": "8,000 load cycles",
