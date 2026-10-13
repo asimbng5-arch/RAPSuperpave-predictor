@@ -2,9 +2,22 @@
 
 Run by the GitHub Actions workflow (.github/workflows/build.yml) with scikit-learn 1.6.1 and ngboost 0.5.11.
 Writes models/ITSD.npz, models/TSR.npz, models/RD.npz and a Markdown report of the held-out accuracy."""
-import os, sys
+import os, sys, traceback
+
+
+def _annotate(level, msg):
+    """Report to the GitHub Actions run page (readable without the raw log)."""
+    print(f"::{level}::" + str(msg).replace('%', '%25').replace('\r', '').replace('\n', '%0A'), flush=True)
+
+
+def _excepthook(tp, val, tb):
+    _annotate('error', 'train_export.py failed:\n' + ''.join(traceback.format_exception(tp, val, tb))[-6000:])
+    sys.__excepthook__(tp, val, tb)
+
+
+sys.excepthook = _excepthook
 import numpy as np
-import sklearn, ngboost
+import sklearn, ngboost, pandas
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.tree import DecisionTreeRegressor, ExtraTreeRegressor
@@ -30,6 +43,7 @@ SETTINGS = {
                  n_estimators=400, learning_rate=0.03, minibatch_frac=0.3, col_sample=0.85, random_state=42, drop=[], weight=None)}
 PAPER = {'ITSD': (0.8327, 0.8166), 'TSR': (0.8270, 0.8012), 'RD': (0.8575, 0.8289)}
 
+_annotate('notice', f'versions: python {sys.version.split()[0]}, numpy {np.__version__}, pandas {pandas.__version__}, scikit-learn {sklearn.__version__}, ngboost {ngboost.__version__}')
 report = [f'## PI-NGB-TSTR models (ngboost {ngboost.__version__}, scikit-learn {sklearn.__version__})', '',
           '| Property | Testing R² | Paper | Validation R² | Paper | Preprocessing identical | Export max diff |',
           '| --- | --- | --- | --- | --- | --- | --- |']
@@ -57,10 +71,13 @@ for t, s in SETTINGS.items():
     same = max(float(np.abs(eng.design_matrix(d) - M).max()) for d, M in zip((tr, te, va), (A, B, C))) == 0.0
     ok &= same and diff < 1e-8
     r2 = (metrics['Testing']['R2'], metrics['Validation']['R2'])
-    print(f'{t}: test R2 {r2[0]:.4f} (paper {PAPER[t][0]}), val R2 {r2[1]:.4f} (paper {PAPER[t][1]}), '
-          f'preprocessing identical {same}, export diff {diff:.1e}', flush=True)
+    line = (f'{t}: test R2 {r2[0]:.4f} (paper {PAPER[t][0]}), val R2 {r2[1]:.4f} (paper {PAPER[t][1]}), '
+            f'preprocessing identical {same}, export diff {diff:.1e}')
+    print(line, flush=True); _annotate('notice', line)
     report.append(f'| {t} | {r2[0]:.4f} | {PAPER[t][0]} | {r2[1]:.4f} | {PAPER[t][1]} | {same} | {diff:.1e} |')
 open(os.path.join(ROOT, 'training_report.md'), 'w').write('\n'.join(report) + '\n')
 if os.environ.get('GITHUB_STEP_SUMMARY'):
     open(os.environ['GITHUB_STEP_SUMMARY'], 'a').write('\n'.join(report) + '\n')
+if not ok:
+    _annotate('error', 'Exported models do not reproduce the trained models exactly (see notices above).')
 sys.exit(0 if ok else 1)
