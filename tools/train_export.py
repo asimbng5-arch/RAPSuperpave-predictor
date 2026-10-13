@@ -66,7 +66,8 @@ for t, s in SETTINGS.items():
     else:
         model.fit(A, tr[t].values)
     out = os.path.join(ROOT, 'models', f'{t}.npz')
-    metrics, diff = export(model, xlsx, t, out, drop_cols=s['drop'], source=src)
+    metrics, diff = export(model, xlsx, t, out, drop_cols=s['drop'], source=src,
+                           dist='lognormal' if s['Dist'] is LogNormal else 'normal')
     eng = NGBEnsemble(out)
     same = max(float(np.abs(eng.design_matrix(d) - M).max()) for d, M in zip((tr, te, va), (A, B, C))) == 0.0
     ok &= same and diff < 1e-8
