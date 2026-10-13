@@ -59,7 +59,7 @@ def _trees(model, n_features):
                 tree_param=np.array(tparam, np.int32), tree_mult=np.array(tmult, np.float64)), depth
 
 
-def export(model, xlsx, target, out_path, drop_cols=(), source='', n_bg=50, seed=0):
+def export(model, xlsx, target, out_path, drop_cols=(), source='', n_bg=50, seed=0, dist=None):
     """Write models/<target>.npz. `model` is the fitted NGBRegressor; `xlsx` the TSTR data file it was trained on.
     Returns the held-out metrics (to compare with the paper) and the maximum difference between the exported
     model and model.predict on all data (should be ~1e-12)."""
@@ -67,8 +67,9 @@ def export(model, xlsx, target, out_path, drop_cols=(), source='', n_bg=50, seed
     tr, te, va, fill = _training_frames(xlsx, target, drop_cols)
     Xtr = tr.drop(columns=[target])
     spec = _spec_from_training(Xtr)
-    dist = 'lognormal' if ('LogNormal' in str(getattr(model, 'Dist', '')) or
-                           getattr(getattr(model, 'D', None), 'kind', '') == 'lognormal') else 'normal'
+    if dist is None:   # 'normal' or 'lognormal'; pass it explicitly when known (official ngboost wraps its Dist classes)
+        names = ' '.join(str(c) for c in getattr(getattr(model, 'Dist', None), '__mro__', [getattr(model, 'Dist', '')]))
+        dist = 'lognormal' if ('LogNormal' in names or getattr(getattr(model, 'D', None), 'kind', '') == 'lognormal') else 'normal'
     trees, depth = _trees(model, len(spec['feature_names']))
     rng = np.random.default_rng(seed)
     spec.update(target=target, dist=dist, fill=fill, init_params=[float(v) for v in np.ravel(model.init_params)],
