@@ -1,7 +1,7 @@
 # RAP Superpave Performance Predictor (PI-NGB-TSTR)
 
 A Streamlit web app for the framework in *Next-Generation Physics-Guided AI Framework for Performance
-Prediction of RAP Superpave Asphalt Mixtures*. Enter a RAP Superpave mix design and get, for each of the three life-cycle
+Prediction of RAP Superpave Asphalt Mixtures*. Enter a RAP Superpave mix design and get, for each of the three
 performance indicators – dry indirect tensile strength (ITSD), tensile strength ratio (TSR) and rut depth (RD):
 
 * the PI-NGB-TSTR prediction with a split-conformal prediction interval (80, 90 or 95%);
