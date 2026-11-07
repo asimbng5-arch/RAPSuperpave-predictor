@@ -1,6 +1,8 @@
 """Train the three PI-NGB-TSTR models exactly as in the PI-NGB-TSTR notebooks and export them for the app.
 
-Run by the GitHub Actions workflow (.github/workflows/build.yml) with scikit-learn 1.6.1 and ngboost 0.5.11.
+Run locally (the data are not stored in this repository) with scikit-learn 1.6.1 and ngboost 0.5.11:
+    pip install "scikit-learn==1.6.1" "ngboost==0.5.11" numpy pandas openpyxl
+    python tools/train_export.py /path/to/folder/with/the/TSTR/xlsx/files
 Writes models/ITSD.npz, models/TSR.npz, models/RD.npz and a Markdown report of the held-out accuracy."""
 import os, sys, traceback
 
@@ -31,6 +33,7 @@ sys.path.insert(0, ROOT)
 from rapcore.export import _training_frames, export
 from rapcore.engine import NGBEnsemble
 
+DATA_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'data')   # local folder, not committed
 FILES = {'ITSD': '2. TSTR_ITSD_RAPSuperpave.xlsx', 'TSR': '4. TSTR_TSR_RAPSuperpave_resplit.xlsx',
          'RD': '6. TSTR_RD_RAPSuperpave_resplit.xlsx'}
 SETTINGS = {
@@ -50,7 +53,7 @@ report = [f'## PI-NGB-TSTR models (ngboost {ngboost.__version__}, scikit-learn {
 ok = True
 src = f'official ngboost {ngboost.__version__}, scikit-learn {sklearn.__version__} (PI-NGB-TSTR notebooks, trained on GitHub Actions)'
 for t, s in SETTINGS.items():
-    xlsx = os.path.join(ROOT, 'data', FILES[t])
+    xlsx = os.path.join(DATA_DIR, FILES[t])
     tr, te, va, _ = _training_frames(xlsx, t, s['drop'])
     Xtr, Xte, Xva = (d.drop(columns=[t]) for d in (tr, te, va))
     cats = Xtr.select_dtypes(include=['object', 'category', 'string']).columns.tolist()

@@ -2,7 +2,7 @@
 
 Streamlit app: enter a RAP Superpave mix design and obtain the predicted dry indirect tensile strength (ITSD),
 tensile strength ratio (TSR) and rut depth (RD) with split-conformal prediction intervals, the probability of
-meeting TSR >= 0.80, engineering input checks and a SHAP explanation of each prediction.
+meeting TSR >= 0.80 and engineering input checks.
 Run locally with:  streamlit run app.py
 """
 import io
@@ -22,7 +22,6 @@ from rapcore.features import (INPUTS, INPUT_NAMES, NUMERIC, CATEGORICAL, LABELS,
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 IN_BROWSER = sys.platform == 'emscripten'      # running in the browser (stlite / Pyodide)
-N_PERM = 6 if IN_BROWSER else 10                # SHAP permutations (10 as in the paper; 6 in the browser for speed)
 BLUE, ORANGE, GREEN, RED, GREY, INK = '#2a78d6', '#eb6834', '#1a9e6e', '#d64545', '#a3a29d', '#1f1f1e'
 TNAME = {'ITSD': 'Dry indirect tensile strength', 'TSR': 'Tensile strength ratio', 'RD': 'Rut depth'}
 TUNIT = {'ITSD': 'kPa', 'TSR': '', 'RD': 'mm'}
@@ -70,7 +69,6 @@ def _default_inputs():
 for c, v in _default_inputs().items():
     st.session_state.setdefault(f'in_{c}', v)
 st.session_state.setdefault('result', None)
-st.session_state.setdefault('shap', {})
 
 
 def load_preset():
@@ -79,7 +77,6 @@ def load_preset():
         for c in INPUT_NAMES:
             st.session_state[f'in_{c}'] = rec[c]
         st.session_state['result'] = None
-        st.session_state['shap'] = {}
 
 
 def set_consistent_vfa():
@@ -111,10 +108,11 @@ def gradation_figure(row, prep_row):
 
 def interval_figure(t, mu, lo, hi):
     """Prediction and interval against the distribution of measured values in the database."""
-    vals = np.array(META.get('measured', {}).get(t, []), float)
+    h = META.get('measured', {}).get(t)
     fig, ax = plt.subplots(figsize=(3.6, 1.35))
-    if len(vals):
-        ax.hist(vals, bins=24, color='#e4e3df', edgecolor='white')
+    if h:   # histogram of the measured values (bin edges and counts only; the data themselves are not shipped)
+        e = np.array(h['edges'], float)
+        ax.bar(e[:-1], h['counts'], width=np.diff(e), align='edge', color='#e4e3df', edgecolor='white')
     top = ax.get_ylim()[1]
     ax.axvspan(lo, hi, color=BLUE, alpha=0.18, lw=0)
     ax.axvline(mu, color=BLUE, lw=2)
@@ -124,23 +122,6 @@ def interval_figure(t, mu, lo, hi):
     ax.set_xlabel(f'{t}' + (f' ({TUNIT[t]})' if TUNIT[t] else '') + ' – grey: measured values in the database', fontsize=7)
     ax.tick_params(labelsize=7)
     fig.tight_layout(pad=0.3)
-    return fig
-
-
-def shap_figure(phi, base, pred, t, top=10):
-    s = phi.reindex(phi.abs().sort_values(ascending=False).index)[:top][::-1]
-    rest = phi.sum() - s.sum()
-    labels = [LABELS.get(k, PHYS_LABEL.get(k, k)) for k in s.index]
-    fig, ax = plt.subplots(figsize=(6.2, 0.33 * len(s) + 1.0))
-    ax.barh(range(len(s)), s.values, color=[RED if v > 0 else BLUE for v in s.values], height=0.65)
-    ax.set_yticks(range(len(s))); ax.set_yticklabels(labels, fontsize=8)
-    ax.axvline(0, color='#52514e', lw=0.8)
-    u = TUNIT[t] if TUNIT[t] else '–'
-    ax.set_xlabel(f'Contribution to predicted {t} ({u})')
-    ax.set_title(f'Average prediction {fmt(t, base)}  →  this mixture {fmt(t, pred)}   (other inputs: {rest:+.3g})',
-                 fontsize=8, loc='left')
-    ax.grid(axis='x', alpha=0.3, lw=0.5)
-    fig.tight_layout()
     return fig
 
 
@@ -189,22 +170,6 @@ def render_results(R, raw, level):
         st.dataframe(physics_table(R['prep']).style.format({'Value': '{:.4g}'}), hide_index=True)
         st.caption('These nine descriptors encode the power-law gradation fit and the Superpave AV–VMA–VFA relationships; '
                    'they are computed automatically and used by the model together with the entered variables.')
-
-    st.markdown('#### Explain the prediction')
-    e1, e2, _ = st.columns([1.3, 1, 2])
-    tsel = e1.selectbox('Property', TARGETS, format_func=lambda t: f'{TNAME[t]} ({t})', key='shap_target')
-    e2.markdown('<div style="height:1.75rem"></div>', unsafe_allow_html=True)
-    if IN_BROWSER:
-        st.caption('In the browser version the explanation takes about 10–60 seconds (longest for ITSD); the page is busy meanwhile.')
-    if e2.button('Explain'):
-        with st.spinner('Computing SHAP contributions...'):
-            st.session_state['shap'][tsel] = P.explain(R['prep'], tsel, n_perm=N_PERM)
-    if tsel in st.session_state['shap']:
-        phi, base = st.session_state['shap'][tsel]
-        fig_to_streamlit(shap_figure(phi, base, res[f'{tsel}_pred'], tsel))
-        st.caption('Red bars raise and blue bars lower the prediction relative to the average prediction over 50 experimental '
-                   'mixtures; * marks physics-informed descriptors. Contributions are associations learned by the model, '
-                   'not causal effects.')
 
     out = pd.concat([R['raw'], R['res']], axis=1)
     st.download_button('Download this prediction (CSV)', out.to_csv(index=False).encode(), file_name='prediction.csv', mime='text/csv')
@@ -291,9 +256,10 @@ def variables_table():
              'Input – ' + ('categorical' if c in CATEGORICAL else 'continuous'), 'Unit': UNITS[c], 'Range / values in database':
              range_text(c).split(': ', 1)[1]} for c in INPUT_NAMES]
     for t, d, u in OUTPUTS:
-        v = np.array(META.get('measured', {}).get(t, [np.nan]), float); f = {'ITSD': '%.0f', 'TSR': '%.2f', 'RD': '%.2f'}[t]
+        h = META.get('measured', {}).get(t, {}); f = {'ITSD': '%.0f', 'TSR': '%.2f', 'RD': '%.2f'}[t]
+        rng = f"{f % h['min']} – {f % h['max']}" if h else ''
         rows.append({'Category': 'RAP Superpave performance', 'Variable': t, 'Description': d, 'Role – type': 'Output – continuous',
-                     'Unit': u, 'Range / values in database': f'{f % np.nanmin(v)} – {f % np.nanmax(v)}' + ('' if u == '–' else f' {u}')})
+                     'Unit': u, 'Range / values in database': rng + ('' if u == '–' or not rng else f' {u}')})
     return pd.DataFrame(rows)
 
 
@@ -307,7 +273,7 @@ with st.sidebar:
                                   'The paper reports the 90% interval.')
     st.divider()
     st.markdown('**How to use**\n1. Load an example or enter your mix design.\n2. Press **Predict**.\n'
-                '3. Read the interval and the TSR decision; check any warnings.\n4. Use **Explain** to see what drives each prediction.')
+                '3. Read the interval and the TSR decision; check any warnings.')
     st.divider()
     src = P.models['ITSD'].spec.get('source', '')
     if src.startswith('interim'):
@@ -367,7 +333,6 @@ with tab_single:
     if st.button('Predict', type='primary'):
         res, prep = P.predict(raw, level)
         st.session_state['result'] = dict(raw=raw, res=res, prep=prep, checks=P.checks(raw)[0], level=level)
-        st.session_state['shap'] = {}
 
     if st.session_state['result'] is not None:
         render_results(st.session_state['result'], raw, level)
@@ -417,7 +382,7 @@ with tab_info:
     st.markdown("#### Applicability\nThe models were developed from mixtures compiled from 24 published studies "
                 f"({DOMAIN.get('n_mixtures', '')} distinct experimental mix designs). Inputs outside the database ranges or "
                 "categories are flagged; predictions for such mixtures are extrapolations. ITSD, TSR and rut depth are laboratory "
-                "indicators of life-cycle performance; they are not field service-life predictions.")
+                "indicators of in-service performance; they are not field service-life predictions.")
     if APP.get('paper'):
         st.markdown(f"#### Reference\n*{APP['paper']}*" + (f"  \n{APP['authors']}" if APP.get('authors') else '') +
                     (f"  \n{APP['affiliation']}" if APP.get('affiliation') else '') +

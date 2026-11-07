@@ -91,7 +91,7 @@ def export(model, xlsx, target, out_path, drop_cols=(), source='', n_bg=50, seed
         y, p = ys[k][:132] if k == 'Training' else ys[k], preds[k][:132] if k == 'Training' else preds[k]
         metrics[k] = dict(R2=float(1 - np.sum((y - p) ** 2) / np.sum((y - y.mean()) ** 2)), RMSE=float(np.sqrt(np.mean((y - p) ** 2))),
                           MAPE=float(100 * np.mean(np.abs(y - p) / np.abs(y))), n=int(len(y)))
-    bg = mats['Training'][rng.choice(132, size=min(n_bg, 132), replace=False)]
+    bg = np.zeros((1, mats['Training'].shape[1]))   # no training data are shipped with the app
     spec.update(calibration=cal, metrics=metrics)
     np.savez_compressed(out_path, spec=json.dumps(spec), bg=bg, **trees)
     return metrics, diff

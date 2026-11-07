@@ -9,7 +9,6 @@ performance indicators – dry indirect tensile strength (ITSD), tensile strengt
 * engineering input checks (gradation monotonicity, AV < VMA, VFA consistency) and an applicability-domain warning when an
   input lies outside the experimental database;
 * the nine physics-informed descriptors computed from the inputs;
-* a SHAP explanation of the prediction (which inputs raise or lower it);
 * batch prediction from an Excel/CSV file, with downloadable results.
 
 ## Folder contents
@@ -27,31 +26,28 @@ performance indicators – dry indirect tensile strength (ITSD), tensile strengt
 
 ## How this repository builds the app
 
-Every push to `main` runs the GitHub Actions workflow `.github/workflows/build.yml`, which:
+Every push to `main` runs the GitHub Actions workflow `.github/workflows/build.yml`, which publishes the app on GitHub Pages
+(about 1 minute). To republish, push a change or open *Actions → Publish the app → Run workflow*.
 
-1. installs scikit-learn 1.6.1 and ngboost 0.5.11 (the versions of the published models);
-2. trains the three PI-NGB-TSTR models from `data/` with the settings of the PI-NGB-TSTR notebooks (`tools/train_export.py`)
-   and exports them to `models/*.npz`, checking that the exported models reproduce `model.predict` exactly;
-3. commits the trained models and `training_report.md` (held-out R² next to the paper's values) back to the repository;
-4. publishes the app on GitHub Pages.
+The experimental and synthetic datasets are **not** stored in this repository. The app ships only the trained models
+(`models/*.npz`: tree structures and calibration constants) and summary information on the database (`models/meta.json`:
+input ranges, categories, four example mixtures and histograms of the measured properties).
 
-The run takes about 5 minutes; its summary page shows the accuracy table. To retrain or republish, push a change or open
-*Actions → Train models and publish the app → Run workflow*.
-
-## Step 1 – install the official models (once)
-
-The `models/` folder initially holds **interim** models (an NGBoost re-implementation with the same settings; the app shows
-a warning banner). Replace them with the official models:
-
-1. Open `Train_and_export_PI-NGB_models.ipynb` in Google Colab and choose *Runtime → Run all*.
-2. Upload the three TSTR data files when asked. The notebook installs scikit-learn 1.6.1 and ngboost 0.5.11, trains the three
-   models with the settings of the PI-NGB-TSTR notebooks, prints testing/validation R² next to the values in the paper and
-   checks that each exported model reproduces `model.predict` exactly.
-3. Unzip the downloaded `models_official.zip` and copy `ITSD.npz`, `TSR.npz` and `RD.npz` into `models/`, replacing the
-   interim files. Keep `meta.json`. The banner disappears and *Model information* shows the official metrics.
+## Retraining the models (optional, with your local data)
 
 The app needs neither scikit-learn nor ngboost: the tree ensembles are stored as arrays and evaluated with NumPy, so the
-models cannot break when library versions change on the server.
+models cannot break when library versions change. To retrain and re-export them from the three TSTR data files:
+
+* **On your computer:**
+  ```bash
+  pip install "scikit-learn==1.6.1" "ngboost==0.5.11" numpy pandas openpyxl
+  python tools/train_export.py /path/to/folder/with/the/TSTR/xlsx/files
+  ```
+* **In Google Colab:** open `Train_and_export_PI-NGB_models.ipynb`, choose *Runtime → Run all* and upload the three data files
+  when asked; copy the downloaded `ITSD.npz`, `TSR.npz` and `RD.npz` into `models/`.
+
+Both print the testing/validation R² of each model and check that the exported model reproduces `model.predict` exactly.
+Then commit the new `models/*.npz` files; the app is republished automatically.
 
 ## Step 2 – publish free and permanently (GitHub Pages, recommended)
 
@@ -63,12 +59,12 @@ paused for inactivity or run out of free hours, and visitors' inputs never leave
    (GitHub Pages is free for public repositories).
 2. Upload the **contents** of this folder to the repository root (*Add file → Upload files*; drag in everything,
    including the `models`, `rapcore` and `examples` folders and the hidden `.nojekyll` file).
-3. Open *Settings → Pages*, set *Source* to **Deploy from a branch**, branch **main**, folder **/ (root)**, and save.
+3. Open *Settings → Pages* and set *Source* to **GitHub Actions**; the workflow then publishes the app.
 4. After about a minute the app is live at `https://<your-user-name>.github.io/rap-superpave-predictor/`. Quote this link
    in the paper's *Data and code availability* statement. Uploading new files updates the app.
 
 Notes: the first visit takes about 30–60 s while the browser downloads Python (it is cached afterwards); predictions are
-instant; the SHAP explanation takes about 10–60 s in the browser and uses 6 instead of 10 permutations for speed.
+instant.
 The same static files can also be hosted on a free *Static* Hugging Face Space, Netlify or Cloudflare Pages.
 
 Why not a server host? Free server tiers put apps to sleep or restrict them: Streamlit Community Cloud hibernates apps
@@ -81,7 +77,7 @@ free CPU (static Spaces remain free).
 pip install -r requirements.txt
 streamlit run app.py
 ```
-The app opens at http://localhost:8501 and runs at full speed (SHAP with 10 permutations, as in the paper).
+The app opens at http://localhost:8501.
 
 ## Customising
 
@@ -97,8 +93,6 @@ Edit the `app` block of `models/meta.json`: `title`, `subtitle`, `authors`, `aff
 * **Intervals**: split-conformal, calibrated on the 57 held-out experimental mixtures (absolute for ITSD and TSR,
   proportional to the prediction for RD), as in Section 4.5 of the paper.
 * **TSR decision**: P(TSR ≥ 0.80) from a Gaussian with the held-out error spread; Pass if P ≥ 0.90, Fail if P ≤ 0.10.
-* **SHAP**: interventional Shapley values by antithetic permutation sampling (10 permutations, 50 background mixtures), one
-  player per input, as in Section 4.9.
 
 ## Limitations
 

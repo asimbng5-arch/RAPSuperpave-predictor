@@ -1,0 +1,4 @@
+data/
+*.xlsx
+!examples/batch_template.xlsx
+__pycache__/
