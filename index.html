@@ -26,7 +26,8 @@
   <div id="root"></div>
   <script type="module">
     import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.js";
-    const f = (p) => ({ url: "./" + p });
+    const V = "__BUILD__";   // replaced by the commit id when the site is published, so browsers fetch fresh files
+    const f = (p) => ({ url: "./" + p + "?v=" + V });
     const files = {};
     for (const p of ["app.py", "rapcore/__init__.py", "rapcore/features.py", "rapcore/engine.py", "rapcore/export.py",
                      "models/ITSD.npz", "models/TSR.npz", "models/RD.npz", "models/meta.json"]) files[p] = f(p);
